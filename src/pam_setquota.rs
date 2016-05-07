@@ -1,0 +1,108 @@
+#![feature(libc)]
+#![allow(unused_variables)]
+extern crate getopts;
+extern crate libc;
+#[macro_use] extern crate mdo;
+extern crate nix;
+extern crate users;
+extern crate pam;
+
+use std::convert::AsRef;
+
+use libc::{c_char, c_int};
+use nix::sys::quota::{quota, quotactl_set};
+use pam::{constants, module}; // https://tozny.github.io/rust-pam/pam/module/index.html
+use pam::conv::PamConv;
+use pam::constants::*;
+use std::path::Path;
+
+#[no_mangle]
+pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
+                                  argc: c_int, argv: *mut *const c_char
+                                  ) -> PamResultCode {
+    use mdo::result::{bind,ret};
+    use users::os::unix::UserExt;
+    
+    let args = unsafe { translate_args(argc, argv) };
+    
+
+    (mdo! {
+        quota =<< parse_args(args)
+            .ok_or(constants::PAM_SESSION_ERR);
+        username =<< module::get_user(pamh, None);
+        user =<< users::get_user_by_name(&username)
+            .ok_or(constants::PAM_USER_UNKNOWN);
+
+        () =<< if user.uid() < 1000 { Err(PAM_SUCCESS) } else { Ok(()) };
+        
+        () =<< quotactl_set(quota::USRQUOTA,
+                            filesystem(user.home_dir()),
+                            user.uid() as i32,
+                            &quota)
+            .or(Err(constants::PAM_SESSION_ERR));
+        
+        ret Ok(constants::PAM_SUCCESS)
+    }).unwrap_or_else(|e| e)
+}
+
+
+fn parse_args<'a>(args: Vec<String>) -> &'a Option<quota::Dqblk> {
+    use mdo::result::{bind,ret};
+
+    let quota0 = quota::Dqblk {
+        bhardlimit: 0,
+        bsoftlimit: 0,
+        curspace:   0,
+        ihardlimit: 0,
+        isoftlimit: 0,
+        curinodes:  0,
+        btime:      0,
+        itime:      0,
+        valid:      quota::QuotaValidFlags::empty()
+    };
+
+    let apply_arg = |q: quota::Dqblk, s: String| {
+        let v: Vec<String> = s.split('=').collect();
+        if v.size() != 2 {
+            None
+        } else {
+            match v[0].as_ref() {
+                "blimit" => {
+                    let w: Vec<String> = v[1].split(',').collect();
+                    if w.size() != 2 {
+                        None
+                    } else {
+                        q.bsoftlimit = w[0].parse::<u64>();
+                        q.bhardlimit = w[1].parse::<u64>();
+                        q.valid.insert(quota::QIF_BLIMITS);
+                        Some(q)
+                    }
+                },
+                _ => None
+            }
+        }
+    };
+
+//    args.fold(defaults, |ret, s| { ret bind apply_arg s });
+}
+
+fn filesystem<'a>(path: &Path) -> &'a Path {
+    Path::new("/home")
+}
+
+#[no_mangle]
+pub extern fn pam_sm_close_session(pamh: *mut module::PamHandleT, flags: PamFlag,
+                                   argc: c_int, argv: *const *const c_char
+                                   ) -> PamResultCode {
+    constants::PAM_SUCCESS
+}
+
+
+unsafe fn translate_args(argc: c_int, argv: *mut *const c_char) -> Vec<String> {
+    use std::ffi;
+    let v = Vec::<*const c_char>::from_raw_parts(argv, argc as usize, argc as usize);
+    v.into_iter().filter_map(|arg| {
+        let bytes = ffi::CStr::from_ptr(arg).to_bytes();
+        String::from_utf8(bytes.to_vec()).ok()
+    }).collect()
+}

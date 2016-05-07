@@ -1,0 +1,17 @@
+[package]
+name = "pam_setquota"
+version = "0.0.1"
+authors = [ "KellerFuchs <kellerfuchs@hashbang.sh>" ]
+
+[lib]
+name = "pam_setquota"
+crate-type = ["dylib"]
+
+[dependencies]
+getopts = "~0.2.4"
+mdo = "*"
+nix = "*"
+users = "0.5.0"
+
+[dependencies.pam]
+git = 'https://github.com/tozny/rust-pam.git'
