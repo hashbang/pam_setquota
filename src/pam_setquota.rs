@@ -109,7 +109,7 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
                   use mdo::result::{bind,ret};
                   mdo! {
                       res =<< res;
-                      (tag, soft, hard) =<< arg(s);
+                      (tag, soft, hard) =<< arg(s.as_bytes());
                       ret match tag {
                           "blocks" => {
                               quota.valid.insert(QIF_BLIMITS);
