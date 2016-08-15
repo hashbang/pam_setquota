@@ -6,6 +6,7 @@ extern crate libc;
 extern crate nix;
 extern crate users;
 extern crate pam;
+extern crate mnt;
 
 use std::convert::AsRef;
 
@@ -19,12 +20,13 @@ use std::path::Path;
 #[no_mangle]
 pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
                                   argc: c_int, argv: *mut *const c_char
-                                  ) -> PamResultCode {
+) -> PamResultCode {
     use mdo::result::{bind,ret};
     use users::os::unix::UserExt;
-    
+    use mnt::get_mount;
+
     let args = unsafe { translate_args(argc, argv) };
-    
+
 
     (mdo! {
         quota =<< parse_args(args)
@@ -34,13 +36,18 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
             .ok_or(constants::PAM_USER_UNKNOWN);
 
         () =<< if user.uid() < 1000 { Err(PAM_SUCCESS) } else { Ok(()) };
-        
+
+        home_opt =<< get_mount(user.home_dir())
+            .or(Err(constants::PAM_SESSION_ERR));
+
+        home =<< home_opt.ok_or(constants::PAM_SESSION_ERR);
+
         () =<< quotactl_set(quota::USRQUOTA,
-                            filesystem(user.home_dir()),
+                            &home.file,
                             user.uid() as i32,
                             &quota)
             .or(Err(constants::PAM_SESSION_ERR));
-        
+
         ret Ok(constants::PAM_SUCCESS)
     }).unwrap_or_else(|e| e)
 }
@@ -84,10 +91,6 @@ fn parse_args<'a>(args: Vec<String>) -> &'a Option<quota::Dqblk> {
     };
 
 //    args.fold(defaults, |ret, s| { ret bind apply_arg s });
-}
-
-fn filesystem<'a>(path: &Path) -> &'a Path {
-    Path::new("/home")
 }
 
 #[no_mangle]
