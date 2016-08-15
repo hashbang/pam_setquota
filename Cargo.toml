@@ -11,6 +11,7 @@ crate-type = ["dylib"]
 getopts = "~0.2.4"
 mdo = "*"
 nix = "*"
+nom = "^1.2.4"
 users = "0.5.0"
 mnt = "~0.3.0"
 syslog = "~3.1.0"

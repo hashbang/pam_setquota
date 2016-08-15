@@ -7,6 +7,7 @@ extern crate nix;
 extern crate users;
 extern crate pam;
 extern crate mnt;
+#[macro_use] extern crate nom;
 extern crate syslog;
 
 use libc::{c_char, c_int};
@@ -37,7 +38,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
 
         quota =<< parse_args(args)
-            .ok_or((PAM_SESSION_ERR, "Failed to parse arguments"));
+            .map_err(|s| (PAM_SESSION_ERR, &*format!("Failed to parse {}", s)));
 
 
         home_opt =<< get_mount(user.home_dir())
@@ -66,8 +67,9 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 }
 
 
-fn parse_args(args: Vec<String>) -> Option<quota::Dqblk> {
-    use mdo::result::{bind,ret};
+fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
+    use nom::{alpha,digit};
+    use std::{i32,str};
 
     let quota0 = quota::Dqblk {
         bhardlimit: 0,
@@ -81,28 +83,33 @@ fn parse_args(args: Vec<String>) -> Option<quota::Dqblk> {
         valid:      quota::QuotaValidFlags::empty()
     };
 
-    let apply_arg = |q: quota::Dqblk, s: String| {
-        let v: Vec<String> = s.split('=').collect();
-        if v.size() != 2 {
-            None
-        } else {
-            match v[0].as_ref() {
-                "blimit" => {
-                    let w: Vec<String> = v[1].split(',').collect();
-                    if w.size() != 2 {
-                        None
-                    } else {
-                        q.bsoftlimit = w[0].parse::<u64>();
-                        q.bhardlimit = w[1].parse::<u64>();
-                        q.valid.insert(quota::QIF_BLIMITS);
-                        Some(q)
-                    }
-                },
-                _ => None
-            }
-        }
-    };
+    named!(arg,
+           chain!(tag: alpha ~
+                  char!('=') ~
+                  v1: digit  ~
+                  char!(',') ~
+                  v2: digit,
+                  || {
+                      use mdo::option::{bind,ret};
+                      mdo! {
+                          s1 =<< str::from_utf8(v1).ok();
+                          i1 =<< i32::from_str_radix(s1, 10).ok();
 
+                          s2 =<< str::from_utf8(v2).ok();
+                          i2 =<< i32::from_str_radix(s2, 10).ok();
+                          ret Some(tag, i1, i2)
+                      }
+                  }
+           )
+    );
+    Ok(quota0)
+//    let apply_arg = |q: quota::Dqblk, s: String| {
+//        match arg(s) {
+//            Done(
+//
+//        }
+//    };
+//
 //    args.fold(defaults, |ret, s| { ret bind apply_arg s });
 }
 
