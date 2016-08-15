@@ -70,8 +70,9 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
     use nom::{alpha,digit};
     use std::{i32,str};
+    use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
 
-    let quota0 = quota::Dqblk {
+    let quota = quota::Dqblk {
         bhardlimit: 0,
         bsoftlimit: 0,
         curspace:   0,
@@ -80,10 +81,10 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
         curinodes:  0,
         btime:      0,
         itime:      0,
-        valid:      quota::QuotaValidFlags::empty()
+        valid:      QuotaValidFlags::empty()
     };
 
-    named!(arg,
+    named!(arg<&[u8], Option<(&[u8], i32, i32)> >,
            chain!(tag: alpha ~
                   char!('=') ~
                   v1: digit  ~
@@ -97,20 +98,36 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
 
                           s2 =<< str::from_utf8(v2).ok();
                           i2 =<< i32::from_str_radix(s2, 10).ok();
-                          ret Some(tag, i1, i2)
+                          ret Some((tag, i1, i2))
                       }
                   }
            )
     );
-    Ok(quota0)
-//    let apply_arg = |q: quota::Dqblk, s: String| {
-//        match arg(s) {
-//            Done(
-//
-//        }
-//    };
-//
-//    args.fold(defaults, |ret, s| { ret bind apply_arg s });
+
+    args.iter().fold(Ok(quota),
+              |res, s| {
+                  use mdo::result::{bind,ret};
+                  mdo! {
+                      res =<< res;
+                      (tag, soft, hard) =<< arg(s);
+                      ret match tag {
+                          "blocks" => {
+                              quota.valid.insert(QIF_BLIMITS);
+                              quota.bsoftlimit = soft;
+                              quota.bhardlimit = hard;
+                              Ok(quota)
+                          },
+                          "inodes" => {
+                              quota.valid.insert(QIF_ILIMITS);
+                              quota.isoftlimit = soft;
+                              quota.ihardlimit = hard;
+                              Ok(quota)
+                          },
+                          _ => Err(s)
+                      }
+                  }
+              }
+    );
 }
 
 #[no_mangle]
