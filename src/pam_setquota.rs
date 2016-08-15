@@ -84,7 +84,7 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
         valid:      QuotaValidFlags::empty()
     };
 
-    named!(arg<&[u8], Option<(&[u8], i32, i32)> >,
+    named!(arg<&[u8], Option<(&[u8], u64, u64)> >,
            chain!(tag: alpha ~
                   char!('=') ~
                   v1: digit  ~
@@ -94,10 +94,10 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
                       use mdo::option::{bind,ret};
                       mdo! {
                           s1 =<< str::from_utf8(v1).ok();
-                          i1 =<< i32::from_str_radix(s1, 10).ok();
+                          i1 =<< u64::from_str_radix(s1, 10).ok();
 
                           s2 =<< str::from_utf8(v2).ok();
-                          i2 =<< i32::from_str_radix(s2, 10).ok();
+                          i2 =<< u64::from_str_radix(s2, 10).ok();
                           ret Some((tag, i1, i2))
                       }
                   }
@@ -107,23 +107,28 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
     args.iter().fold(Ok(quota),
               |res, s| {
                   use mdo::result::{bind,ret};
+                  use nom::IResult::Done;
                   mdo! {
                       res =<< res;
-                      (tag, soft, hard) =<< arg(s.as_bytes());
-                      ret match tag {
-                          "blocks" => {
-                              quota.valid.insert(QIF_BLIMITS);
-                              quota.bsoftlimit = soft;
-                              quota.bhardlimit = hard;
-                              Ok(quota)
-                          },
-                          "inodes" => {
-                              quota.valid.insert(QIF_ILIMITS);
-                              quota.isoftlimit = soft;
-                              quota.ihardlimit = hard;
-                              Ok(quota)
-                          },
+                      // TODO: This is horrible; check why parse cannot be deconstructed
+                      parse =<< match arg(s.as_bytes()) {
+                          Done(_, o) => o.ok_or(s),
                           _ => Err(s)
+                      };
+                      ret match parse.0 {
+                              b"blocks" => {
+                                  quota.valid.insert(QIF_BLIMITS);
+                                  quota.bsoftlimit = parse.1;
+                                  quota.bhardlimit = parse.2;
+                                  Ok(quota)
+                              },
+                              b"inodes" => {
+                                  quota.valid.insert(QIF_ILIMITS);
+                                  quota.isoftlimit = parse.1;
+                                  quota.ihardlimit = parse.2;
+                                  Ok(quota)
+                              },
+                              _ => Err(s)
                       }
                   }
               }
