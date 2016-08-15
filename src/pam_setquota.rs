@@ -7,6 +7,7 @@ extern crate nix;
 extern crate users;
 extern crate pam;
 extern crate mnt;
+extern crate syslog;
 
 use std::convert::AsRef;
 
@@ -16,6 +17,7 @@ use pam::{constants, module}; // https://tozny.github.io/rust-pam/pam/module/ind
 use pam::conv::PamConv;
 use pam::constants::*;
 use std::path::Path;
+use syslog::{Facility,Severity};
 
 #[no_mangle]
 pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
@@ -30,26 +32,39 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
     (mdo! {
         quota =<< parse_args(args)
-            .ok_or(constants::PAM_SESSION_ERR);
-        username =<< module::get_user(pamh, None);
-        user =<< users::get_user_by_name(&username)
-            .ok_or(constants::PAM_USER_UNKNOWN);
+            .ok_or((PAM_SESSION_ERR, "Failed to parse arguments"));
 
-        () =<< if user.uid() < 1000 { Err(PAM_SUCCESS) } else { Ok(()) };
+        username =<< module::get_user(pamh, None)
+            .map_err(|e| (e, "Failed to get username"));
+
+        user =<< users::get_user_by_name(&username)
+            .ok_or((PAM_USER_UNKNOWN, "Unknown user"));
+
+        () =<< if user.uid() < 1000 { Err((PAM_SUCCESS, "")) } else { Ok(()) };
 
         home_opt =<< get_mount(user.home_dir())
-            .or(Err(constants::PAM_SESSION_ERR));
+            .or(Err((PAM_SESSION_ERR, "Couldn't get the homedir's mountpoint")));
 
-        home =<< home_opt.ok_or(constants::PAM_SESSION_ERR);
+        home =<< home_opt
+            .ok_or((PAM_SESSION_ERR, "Couldn't get the homedir's mountpoint"));
 
         () =<< quotactl_set(quota::USRQUOTA,
                             &home.file,
                             user.uid() as i32,
                             &quota)
-            .or(Err(constants::PAM_SESSION_ERR));
+            .or(Err((PAM_SESSION_ERR, "Failed to set quota")));
 
-        ret Ok(constants::PAM_SUCCESS)
-    }).unwrap_or_else(|e| e)
+        ret Ok(PAM_SUCCESS)
+    }).unwrap_or_else(|(e, msg)|
+                      if e != PAM_SUCCESS {
+                          mdo! {
+                              writer =<< syslog::unix(Facility::LOG_AUTH);
+                              result =<< writer.send_3164(Severity::LOG_ALERT, &format!("pam_setquota: {}", msg));
+                              ret Ok(result)
+                          };
+                          e
+                      } else { e }
+    )
 }
 
 
