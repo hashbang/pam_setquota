@@ -9,14 +9,10 @@ extern crate pam;
 extern crate mnt;
 extern crate syslog;
 
-use std::convert::AsRef;
-
 use libc::{c_char, c_int};
 use nix::sys::quota::{quota, quotactl_set};
 use pam::{constants, module}; // https://tozny.github.io/rust-pam/pam/module/index.html
-use pam::conv::PamConv;
 use pam::constants::*;
-use std::path::Path;
 use syslog::{Facility,Severity};
 
 #[no_mangle]
