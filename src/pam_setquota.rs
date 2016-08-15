@@ -66,7 +66,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 }
 
 
-fn parse_args<'a>(args: Vec<String>) -> &'a Option<quota::Dqblk> {
+fn parse_args(args: Vec<String>) -> Option<quota::Dqblk> {
     use mdo::result::{bind,ret};
 
     let quota0 = quota::Dqblk {
