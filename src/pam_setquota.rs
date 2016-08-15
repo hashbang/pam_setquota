@@ -104,7 +104,7 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
            )
     );
 
-    args.iter().fold(Ok(quota),
+    return args.iter().fold(Ok(quota),
               |res, s| {
                   use mdo::result::{bind,ret};
                   use nom::IResult::Done;
