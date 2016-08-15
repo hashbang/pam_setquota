@@ -31,9 +31,6 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
 
     (mdo! {
-        quota =<< parse_args(args)
-            .ok_or((PAM_SESSION_ERR, "Failed to parse arguments"));
-
         username =<< module::get_user(pamh, None)
             .map_err(|e| (e, "Failed to get username"));
 
@@ -41,6 +38,11 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
             .ok_or((PAM_USER_UNKNOWN, "Unknown user"));
 
         () =<< if user.uid() < 1000 { Err((PAM_SUCCESS, "")) } else { Ok(()) };
+
+
+        quota =<< parse_args(args)
+            .ok_or((PAM_SESSION_ERR, "Failed to parse arguments"));
+
 
         home_opt =<< get_mount(user.home_dir())
             .or(Err((PAM_SESSION_ERR, "Couldn't get the homedir's mountpoint")));
