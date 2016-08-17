@@ -98,19 +98,16 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
     };
 
     // A parser (and converter) for “([a-z]+)=([0-9])+,([0-9])+”
-    named!(arg<&[u8], Option<(&[u8], u64, u64)> >,
+    named!(arg<&str, Option<(&str, u64, u64)> >,
            chain!(tag: alpha ~
-                  char!('=') ~
-                  v1: digit  ~
-                  char!(',') ~
-                  v2: digit,
+                  tag_s!("=") ~
+                  s1: digit  ~
+                  tag_s!(",") ~
+                  s2: digit,
                   || {
                       use mdo::option::{bind,ret};
                       mdo! {
-                          s1 =<< str::from_utf8(v1).ok();
                           i1 =<< u64::from_str_radix(s1, 10).ok();
-
-                          s2 =<< str::from_utf8(v2).ok();
                           i2 =<< u64::from_str_radix(s2, 10).ok();
                           ret Some((tag, i1, i2))
                       }
@@ -127,18 +124,18 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
                   mdo! {
                       quota0 =<< res;
                       // TODO: This is horrible; check why parse cannot be deconstructed
-                      parse =<< match arg(s.as_bytes()) {
+                      parse =<< match arg(s) {
                           Done(_, o) => o.ok_or(Cow::from(s.as_str())),
                           _ => Err(Cow::from(s.as_str()))
                       };
                       ret match parse.0 {
-                          b"blocks" => Ok(quota::Dqblk {
+                          "blocks" => Ok(quota::Dqblk {
                               bsoftlimit: parse.1,
                               bhardlimit: parse.2,
                               valid:      quota0.valid | QIF_BLIMITS,
                               .. quota0
                           }),
-                          b"inodes" => Ok(quota::Dqblk {
+                          "inodes" => Ok(quota::Dqblk {
                               isoftlimit: parse.1,
                               ihardlimit: parse.2,
                               valid:      quota0.valid | QIF_ILIMITS,
