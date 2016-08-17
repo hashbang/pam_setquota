@@ -72,7 +72,7 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
     use std::{i32,str};
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
 
-    let quota = quota::Dqblk {
+    let quota0 = quota::Dqblk {
         bhardlimit: 0,
         bsoftlimit: 0,
         curspace:   0,
@@ -104,31 +104,31 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
            )
     );
 
-    return args.iter().fold(Ok(quota),
+    return args.iter().fold(Ok(quota0),
               |res, s| {
                   use mdo::result::{bind,ret};
                   use nom::IResult::Done;
                   mdo! {
-                      res =<< res;
+                      quota0 =<< res;
                       // TODO: This is horrible; check why parse cannot be deconstructed
                       parse =<< match arg(s.as_bytes()) {
-                          Done(_, o) => o.ok_or(s),
-                          _ => Err(s)
+                          Done(_, o) => o.ok_or(*s),
+                          _ => Err(*s)
                       };
                       ret match parse.0 {
-                              b"blocks" => {
-                                  quota.valid.insert(QIF_BLIMITS);
-                                  quota.bsoftlimit = parse.1;
-                                  quota.bhardlimit = parse.2;
-                                  Ok(quota)
-                              },
-                              b"inodes" => {
-                                  quota.valid.insert(QIF_ILIMITS);
-                                  quota.isoftlimit = parse.1;
-                                  quota.ihardlimit = parse.2;
-                                  Ok(quota)
-                              },
-                              _ => Err(s)
+                          b"blocks" => Ok(quota::Dqblk {
+                              bsoftlimit: parse.1,
+                              bhardlimit: parse.2,
+                              valid:      quota0.valid | QIF_BLIMITS,
+                              .. quota0
+                          }),
+                          b"inodes" => Ok(quota::Dqblk {
+                              isoftlimit: parse.1,
+                              ihardlimit: parse.2,
+                              valid:      quota0.valid | QIF_ILIMITS,
+                              .. quota0
+                          }),
+                          _ => Err(*s)
                       }
                   }
               }
