@@ -1,4 +1,4 @@
-#![feature(libc)]
+#![feature(libc, convert)]
 #![allow(unused_variables)]
 extern crate getopts;
 extern crate libc;
@@ -45,7 +45,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
         // Parse the module's arguments.
         // It is done late to avoid erroring out if the user has uid < 1000
-        quota =<< parse_args(args)
+        quota =<< parse_args(&args)
             .map_err(|s| (PAM_SESSION_ERR, Cow::from(format!("Failed to parse {}", s))));
 
 
@@ -83,7 +83,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
 // parse_args returns either a quota::Dqblk struct
 //  or the string that failed to parse.
-fn parse_args<'a>(args: Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
+fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
     use nom::{alpha,digit};
     use std::{i32,str};
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
@@ -119,7 +119,7 @@ fn parse_args<'a>(args: Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
 
     // We fold over the arguments, updating the quota value as we go.
     // Again, the Result<> monad is used to error-out early.
-    return args.iter().fold(Ok(quota0),
+    args.iter().fold(Ok(quota0),
               |res, s| {
                   use mdo::result::{bind,ret};
                   use nom::IResult::Done;
@@ -127,8 +127,8 @@ fn parse_args<'a>(args: Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
                       quota0 =<< res;
                       // TODO: This is horrible; check why parse cannot be deconstructed
                       parse =<< match arg(s.as_bytes()) {
-                          Done(_, o) => o.ok_or(Cow::from(s)),
-                          _ => Err(Cow::from(s))
+                          Done(_, o) => o.ok_or(Cow::from(s.as_str())),
+                          _ => Err(Cow::from(s.as_str()))
                       };
                       ret match parse.0 {
                           b"blocks" => Ok(quota::Dqblk {
@@ -143,11 +143,11 @@ fn parse_args<'a>(args: Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
                               valid:      quota0.valid | QIF_ILIMITS,
                               .. quota0
                           }),
-                          _ => Err(Cow::from(s))
+                          _ => Err(Cow::from(s.as_str()))
                       }
                   }
               }
-    );
+    )
 }
 
 #[no_mangle]
