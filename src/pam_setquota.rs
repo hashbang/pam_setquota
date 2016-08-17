@@ -15,6 +15,7 @@ use nix::sys::quota::{quota, quotactl_set};
 use pam::{constants, module}; // https://tozny.github.io/rust-pam/pam/module/index.html
 use pam::constants::*;
 use syslog::{Facility,Severity};
+use std::borrow::Cow;
 
 #[no_mangle]
 pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
@@ -32,29 +33,29 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
     (mdo! {
         // Get the username from PAM
         username =<< module::get_user(pamh, None)
-            .map_err(|e| (e, "Failed to get username"));
+            .map_err(|e| (e, Cow::from("Failed to get username")));
 
         // Get the user object from the passwd db
         user =<< users::get_user_by_name(&username)
-            .ok_or((PAM_USER_UNKNOWN, "Unknown user"));
+            .ok_or((PAM_USER_UNKNOWN, Cow::from("Unknown user")));
 
         // If this is a system user (uid < 1000), bail out early with PAM_SUCCESS
-        () =<< if user.uid() < 1000 { Err((PAM_SUCCESS, "")) } else { Ok(()) };
+        () =<< if user.uid() < 1000 { Err((PAM_SUCCESS, Cow::from(""))) } else { Ok(()) };
 
 
         // Parse the module's arguments.
         // It is done late to avoid erroring out if the user has uid < 1000
         quota =<< parse_args(args)
-            .map_err(|s| (PAM_SESSION_ERR, &*format!("Failed to parse {}", s)));
+            .map_err(|s| (PAM_SESSION_ERR, Cow::from(format!("Failed to parse {}", s))));
 
 
         // Get the user's homedir mountpoint.
         // Somehow, this requires unwrapping twice (yay for silly APIs!)
         home_opt =<< get_mount(user.home_dir())
-            .or(Err((PAM_SESSION_ERR, "Couldn't get the homedir's mountpoint")));
+            .or(Err((PAM_SESSION_ERR, Cow::from("Couldn't get the homedir's mountpoint"))));
 
         home =<< home_opt
-            .ok_or((PAM_SESSION_ERR, "Couldn't get the homedir's mountpoint"));
+            .ok_or((PAM_SESSION_ERR, Cow::from("Couldn't get the homedir's mountpoint")));
 
 
         // Perform the actual quotactl(2) call
@@ -62,7 +63,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
                             &home.file,
                             user.uid() as i32,
                             &quota)
-            .or(Err((PAM_SESSION_ERR, "Failed to set quota")));
+            .or(Err((PAM_SESSION_ERR, Cow::from("Failed to set quota"))));
 
         ret Ok(PAM_SUCCESS)
     }).unwrap_or_else(|(e, msg)|
@@ -82,7 +83,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 
 // parse_args returns either a quota::Dqblk struct
 //  or the string that failed to parse.
-fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
+fn parse_args<'a>(args: Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
     use nom::{alpha,digit};
     use std::{i32,str};
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
@@ -126,8 +127,8 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
                       quota0 =<< res;
                       // TODO: This is horrible; check why parse cannot be deconstructed
                       parse =<< match arg(s.as_bytes()) {
-                          Done(_, o) => o.ok_or(*s),
-                          _ => Err(*s)
+                          Done(_, o) => o.ok_or(Cow::from(s)),
+                          _ => Err(Cow::from(s))
                       };
                       ret match parse.0 {
                           b"blocks" => Ok(quota::Dqblk {
@@ -142,7 +143,7 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
                               valid:      quota0.valid | QIF_ILIMITS,
                               .. quota0
                           }),
-                          _ => Err(*s)
+                          _ => Err(Cow::from(s))
                       }
                   }
               }
