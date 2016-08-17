@@ -1,6 +1,5 @@
 #![feature(libc, convert)]
 #![allow(unused_variables)]
-extern crate getopts;
 extern crate libc;
 #[macro_use] extern crate mdo;
 extern crate nix;
@@ -11,11 +10,12 @@ extern crate mnt;
 extern crate syslog;
 
 use libc::{c_char, c_int};
-use nix::sys::quota::{quota, quotactl_set};
-use pam::{constants, module}; // https://tozny.github.io/rust-pam/pam/module/index.html
+use pam::module; // https://tozny.github.io/rust-pam/pam/module/index.html
 use pam::constants::*;
 use syslog::{Facility,Severity};
 use std::borrow::Cow;
+use nix::sys::quota::quota;
+
 
 #[no_mangle]
 pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
@@ -24,6 +24,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
     use mdo::result::{bind,ret};
     use users::os::unix::UserExt;
     use mnt::get_mount;
+    use nix::sys::quota::quotactl_set;
 
     let args = unsafe { translate_args(argc, argv) };
 
@@ -85,7 +86,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 //  or the string that failed to parse.
 fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
     use nom::{alpha,digit};
-    use std::{i32,str};
+    use std::str;
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
 
     // The default quota value
@@ -155,7 +156,7 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
 pub extern fn pam_sm_close_session(pamh: *mut module::PamHandleT, flags: PamFlag,
                                    argc: c_int, argv: *const *const c_char
                                    ) -> PamResultCode {
-    constants::PAM_SUCCESS
+    PAM_SUCCESS
 }
 
 
