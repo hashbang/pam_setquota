@@ -73,15 +73,8 @@ fn parse_args(args: Vec<String>) -> Result<quota::Dqblk, String> {
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
 
     let quota0 = quota::Dqblk {
-        bhardlimit: 0,
-        bsoftlimit: 0,
-        curspace:   0,
-        ihardlimit: 0,
-        isoftlimit: 0,
-        curinodes:  0,
-        btime:      0,
-        itime:      0,
-        valid:      QuotaValidFlags::empty()
+        valid: QuotaValidFlags::empty(),
+        .. quota::Dqblk::default()
     };
 
     named!(arg<&[u8], Option<(&[u8], u64, u64)> >,
