@@ -1,4 +1,4 @@
-#![feature(libc, convert)]
+#![feature(libc)]
 #![allow(unused_variables)]
 extern crate libc;
 #[macro_use] extern crate mdo;
@@ -86,7 +86,6 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
 //  or the string that failed to parse.
 fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
     use nom::{alpha,digit};
-    use std::str;
     use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
 
     // The default quota value
