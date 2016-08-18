@@ -114,36 +114,37 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
            )
     );
 
+
     // We fold over the arguments, updating the quota value as we go.
     // Again, the Result<> monad is used to error-out early.
     args.iter().fold(Ok(quota0),
-              |res, s| {
-                  use mdo::result::{bind,ret};
-                  use nom::IResult::Done;
-                  mdo! {
-                      quota0 =<< res;
-                      // TODO: This is horrible; check why parse cannot be deconstructed
-                      parse =<< match arg(s) {
-                          Done(_, o) => o.ok_or(Cow::from(s.as_str())),
-                          _ => Err(Cow::from(s.as_str()))
-                      };
-                      ret match parse.0 {
-                          "blocks" => Ok(quota::Dqblk {
-                              bsoftlimit: parse.1,
-                              bhardlimit: parse.2,
-                              valid:      quota0.valid | QIF_BLIMITS,
-                              .. quota0
-                          }),
-                          "inodes" => Ok(quota::Dqblk {
-                              isoftlimit: parse.1,
-                              ihardlimit: parse.2,
-                              valid:      quota0.valid | QIF_ILIMITS,
-                              .. quota0
-                          }),
-                          _ => Err(Cow::from(s.as_str()))
-                      }
-                  }
-              }
+                     |res, s| {
+                         use mdo::result::{bind,ret};
+                         use nom::IResult::Done;
+                         mdo! {
+                             quota0 =<< res;
+                             // TODO: This is horrible; check why parse cannot be deconstructed
+                             parse =<< match arg(s) {
+                                 Done(_, o) => o.ok_or(Cow::from(s.as_str())),
+                                 _ => Err(Cow::from(s.as_str()))
+                             };
+                             ret match parse.0 {
+                                 "blocks" => Ok(quota::Dqblk {
+                                     bsoftlimit: parse.1,
+                                     bhardlimit: parse.2,
+                                     valid:      quota0.valid | QIF_BLIMITS,
+                                     .. quota0
+                                 }),
+                                 "inodes" => Ok(quota::Dqblk {
+                                     isoftlimit: parse.1,
+                                     ihardlimit: parse.2,
+                                     valid:      quota0.valid | QIF_ILIMITS,
+                                     .. quota0
+                                 }),
+                                 _ => Err(Cow::from(s.as_str()))
+                             }
+                         }
+                     }
     )
 }
 
