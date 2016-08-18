@@ -97,20 +97,10 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
     };
 
     // A parser (and converter) for “([a-z]+)=([0-9])+,([0-9])+”
-    named!(arg<&str, Option<(&str, u64, u64)> >,
-           chain!(tag: alpha ~
-                  tag_s!("=") ~
-                  s1: digit  ~
-                  tag_s!(",") ~
-                  s2: digit,
-                  || {
-                      use mdo::option::{bind,ret};
-                      mdo! {
-                          i1 =<< u64::from_str_radix(s1, 10).ok();
-                          i2 =<< u64::from_str_radix(s2, 10).ok();
-                          ret Some((tag, i1, i2))
-                      }
-                  }
+    named!(int64<&str, u64>, map_res!(digit, |s| u64::from_str_radix(s, 10)));
+    named!(arg<&str, (&str, u64, u64)>,
+           chain!(tag: alpha ~ tag_s!("=") ~ i1: int64 ~ tag_s!(",") ~ i2: int64,
+                  || (tag, i1, i2)
            )
     );
 
@@ -125,7 +115,7 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
                              quota0 =<< res;
                              // TODO: This is horrible; check why parse cannot be deconstructed
                              parse =<< match arg(s) {
-                                 Done(_, o) => o.ok_or(Cow::from(s.as_str())),
+                                 Done(_, o) => Ok(o),
                                  _ => Err(Cow::from(s.as_str()))
                              };
                              ret match parse.0 {
