@@ -5,7 +5,7 @@ authors = [ "KellerFuchs <kellerfuchs@hashbang.sh>" ]
 
 [lib]
 name = "pam_setquota"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 mdo = "*"
@@ -17,3 +17,6 @@ syslog = "~3.1.0"
 
 [dependencies.pam]
 git = 'https://github.com/tozny/rust-pam.git'
+
+[profile.release]
+lto = true
