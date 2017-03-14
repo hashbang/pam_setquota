@@ -13,3 +13,4 @@ git:
 
 script:
 - cargo build --verbose
+- rustfmt --write-mode checkstyle src/pam_setquota.rs > /dev/null
