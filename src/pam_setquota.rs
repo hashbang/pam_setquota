@@ -1,27 +1,31 @@
 #![feature(libc)]
 #![allow(unused_variables)]
 extern crate libc;
-#[macro_use] extern crate mdo;
+#[macro_use]
+extern crate mdo;
 extern crate nix;
 extern crate users;
 extern crate pam;
 extern crate mnt;
-#[macro_use] extern crate nom;
+#[macro_use]
+extern crate nom;
 extern crate syslog;
 
 use libc::{c_char, c_int};
 use pam::module; // https://tozny.github.io/rust-pam/pam/module/index.html
 use pam::constants::*;
-use syslog::{Facility,Severity};
+use syslog::{Facility, Severity};
 use std::borrow::Cow;
 use nix::sys::quota::quota;
 
 
 #[no_mangle]
-pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
-                                  argc: c_int, argv: *mut *const c_char
-) -> PamResultCode {
-    use mdo::result::{bind,ret};
+pub extern "C" fn pam_sm_open_session(pamh: &module::PamHandleT,
+                                      flags: PamFlag,
+                                      argc: c_int,
+                                      argv: *mut *const c_char)
+                                      -> PamResultCode {
+    use mdo::result::{bind, ret};
     use users::os::unix::UserExt;
     use mnt::get_mount;
     use nix::sys::quota::quotactl_set;
@@ -67,34 +71,33 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
             .or(Err((PAM_SESSION_ERR, Cow::from("Failed to set quota"))));
 
         ret Ok(PAM_SUCCESS)
-    }).unwrap_or_else(|(e, msg)| {
-                      if e != PAM_SUCCESS {
-                          // We cheerfully ignore errors in logging to syslog,
-                          // since there is nothing we can do about it.
-                          mdo! {
+    })
+            .unwrap_or_else(|(e, msg)| {
+                if e != PAM_SUCCESS {
+                    // We cheerfully ignore errors in logging to syslog,
+                    // since there is nothing we can do about it.
+                    mdo! {
                               writer =<< syslog::unix(Facility::LOG_AUTH);
-                              result =<< writer.send_3164(Severity::LOG_ALERT, &format!("pam_setquota: {}", msg));
+                              result =<< writer.send_3164(Severity::LOG_ALERT,
+                                                          &format!("pam_setquota: {}", msg));
                               ret Ok(result)
                           };
-                      };
-                      e
-    })
+                };
+                e
+            })
 }
 
 
 // parse_args returns either a quota::Dqblk struct
 //  or the string that failed to parse.
-fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > {
-    use nom::{alpha,digit};
-    use nix::sys::quota::quota::{QuotaValidFlags,QIF_BLIMITS,QIF_ILIMITS};
+fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str>> {
+    use nom::{alpha, digit};
+    use nix::sys::quota::quota::{QuotaValidFlags, QIF_BLIMITS, QIF_ILIMITS};
 
     // The default quota value
     // It isn't quota::Dqblk::default() directly because
     //  the documentation doesn't state what the default value is.
-    let quota0 = quota::Dqblk {
-        valid: QuotaValidFlags::empty(),
-        .. quota::Dqblk::default()
-    };
+    let quota0 = quota::Dqblk { valid: QuotaValidFlags::empty(), ..quota::Dqblk::default() };
 
     // A parser (and converter) for “([a-z]+)=([0-9])+,([0-9])+”
     named!(int64<&str, u64>, map_res!(digit, |s| u64::from_str_radix(s, 10)));
@@ -107,11 +110,10 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
 
     // We fold over the arguments, updating the quota value as we go.
     // Again, the Result<> monad is used to error-out early.
-    args.iter().fold(Ok(quota0),
-                     |res, s| {
-                         use mdo::result::{bind,ret};
-                         use nom::IResult::Done;
-                         mdo! {
+    args.iter().fold(Ok(quota0), |res, s| {
+        use mdo::result::{bind, ret};
+        use nom::IResult::Done;
+        mdo! {
                              quota0 =<< res;
                              // TODO: This is horrible; check why parse cannot be deconstructed
                              parse =<< match arg(s) {
@@ -134,15 +136,16 @@ fn parse_args<'a>(args: &'a Vec<String>) -> Result<quota::Dqblk, Cow<'a, str> > 
                                  _ => Err(Cow::from(s.as_str()))
                              }
                          }
-                     }
-    )
+    })
 }
 
 #[no_mangle]
 // Closing the session involves no special work.
-pub extern fn pam_sm_close_session(pamh: *mut module::PamHandleT, flags: PamFlag,
-                                   argc: c_int, argv: *const *const c_char
-                                   ) -> PamResultCode {
+pub extern "C" fn pam_sm_close_session(pamh: *mut module::PamHandleT,
+                                       flags: PamFlag,
+                                       argc: c_int,
+                                       argv: *const *const c_char)
+                                       -> PamResultCode {
     PAM_SUCCESS
 }
 
@@ -152,8 +155,10 @@ pub extern fn pam_sm_close_session(pamh: *mut module::PamHandleT, flags: PamFlag
 unsafe fn translate_args(argc: c_int, argv: *mut *const c_char) -> Vec<String> {
     use std::ffi;
     let v = Vec::<*const c_char>::from_raw_parts(argv, argc as usize, argc as usize);
-    v.into_iter().filter_map(|arg| {
-        let bytes = ffi::CStr::from_ptr(arg).to_bytes();
-        String::from_utf8(bytes.to_vec()).ok()
-    }).collect()
+    v.into_iter()
+        .filter_map(|arg| {
+                        let bytes = ffi::CStr::from_ptr(arg).to_bytes();
+                        String::from_utf8(bytes.to_vec()).ok()
+                    })
+        .collect()
 }
