@@ -67,7 +67,7 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
             .or(Err((PAM_SESSION_ERR, Cow::from("Failed to set quota"))));
 
         ret Ok(PAM_SUCCESS)
-    }).unwrap_or_else(|(e, msg)|
+    }).unwrap_or_else(|(e, msg)| {
                       if e != PAM_SUCCESS {
                           // We cheerfully ignore errors in logging to syslog,
                           // since there is nothing we can do about it.
@@ -76,9 +76,9 @@ pub extern fn pam_sm_open_session(pamh: &module::PamHandleT, flags: PamFlag,
                               result =<< writer.send_3164(Severity::LOG_ALERT, &format!("pam_setquota: {}", msg));
                               ret Ok(result)
                           };
-                          e
-                      } else { e }
-    )
+                      };
+                      e
+    })
 }
 
 
