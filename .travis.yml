@@ -11,6 +11,7 @@ addons:
 git:
   depth: 1
 
+before_script: cargo install rustfmt
 script:
 - cargo build --verbose
-- rustfmt --write-mode checkstyle src/pam_setquota.rs > /dev/null
+- ~/.cargo/bin/rustfmt --write-mode checkstyle src/pam_setquota.rs > /dev/null
