@@ -1,5 +1,5 @@
 #![feature(libc)]
-#![allow(unused_variables)]
+#![allow(unused_variables)] // Unused parameters from the PAM API
 extern crate libc;
 extern crate nix;
 extern crate users;
