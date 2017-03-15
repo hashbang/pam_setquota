@@ -1,5 +1,6 @@
-#![feature(libc)]
+#![feature(alloc_system,libc)]
 #![allow(unused_variables)] // Unused parameters from the PAM API
+extern crate alloc_system;  // Save space by using malloc rather than jemalloc
 extern crate libc;
 extern crate nix;
 extern crate users;
