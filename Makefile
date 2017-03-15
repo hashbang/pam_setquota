@@ -1,16 +1,11 @@
-CC ?= cc
-LD ?= ld
+.PHONY: default install clean
 
-pam_setquota.so: pam_setquota.o
-	${LD} -x -z relro -z now -shared -o $@ $<
+default: target/release/libpam_setquota.so
+target/release/libpam_setquota.so: src/pam_setquota.rs Cargo.toml
+	cargo build --release
 
-pam_setquota.o: pam_setquota.c
-	${CC} -Os -fPIC -DLINUX_PAM -DPAM_DYNAMIC -D_FORTIFY_SOURCE=2 \
-		-Wall -Wextra -fstack-protector-all -c $<
-
-install: pam_setquota.so
-	install --mode=644 pam_setquota.so /lib/security
+install: target/release/libpam_setquota.so
+	install --mode=644 $< $(DESTDIR)/lib/security/pam_setquota.so
 
 clean:
-	rm -f pam_setquota.o pam_setquota.so
-
+	rm -rf target/
