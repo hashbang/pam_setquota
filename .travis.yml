@@ -11,7 +11,11 @@ addons:
 git:
   depth: 1
 
-before_script: cargo install rustfmt
+before_script:
+  - cargo install rustfmt
+  - cargo install clippy
+
 script:
-- cargo build --verbose
-- ~/.cargo/bin/rustfmt --write-mode checkstyle src/pam_setquota.rs > /dev/null
+  - cargo build --verbose
+  - cargo clippy
+  - ~/.cargo/bin/rustfmt --write-mode checkstyle src/pam_setquota.rs > /dev/null
